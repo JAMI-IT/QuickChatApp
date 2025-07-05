@@ -1,75 +1,354 @@
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    FlatList,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import { useThemeColor } from '@/hooks/useThemeColor';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { markAsRead, toggleFavorite } from '@/store/slices/chatSlice';
+import { Conversation } from '@/types/chat';
 
-export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
+export default function ChatsScreen() {
+  const router = useRouter();
+  const dispatch = useAppDispatch();
+  const { conversations, favorites, isLoading } = useAppSelector(state => state.chat);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  
+  const backgroundColor = useThemeColor({}, 'background');
+  const textColor = useThemeColor({}, 'text');
+  const tintColor = useThemeColor({}, 'tint');
+  const iconColor = useThemeColor({}, 'icon');
+
+  // Load favorites from AsyncStorage on component mount
+  useEffect(() => {
+    loadFavoritesFromStorage();
+  }, []);
+
+  // Save favorites to AsyncStorage whenever they change
+  useEffect(() => {
+    saveFavoritesToStorage();
+  }, [favorites]);
+
+  const loadFavoritesFromStorage = async () => {
+    try {
+      const storedFavorites = await AsyncStorage.getItem('chatFavorites');
+      if (storedFavorites) {
+        const parsedFavorites = JSON.parse(storedFavorites);
+        // Update the Redux store with stored favorites
+        parsedFavorites.forEach((conversationId: string) => {
+          dispatch(toggleFavorite(conversationId));
+        });
+      }
+    } catch (error) {
+      console.error('Error loading favorites from storage:', error);
+    }
+  };
+
+  const saveFavoritesToStorage = async () => {
+    try {
+      await AsyncStorage.setItem('chatFavorites', JSON.stringify(favorites));
+    } catch (error) {
+      console.error('Error saving favorites to storage:', error);
+    }
+  };
+
+  const filteredConversations = conversations
+    .filter(conv => {
+      const matchesSearch = conv.participants.some(participant =>
+        participant.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      const matchesFavorites = showFavoritesOnly ? conv.isFavorite : true;
+      return matchesSearch && matchesFavorites;
+    })
+    .sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime());
+
+  const handleConversationPress = (conversation: Conversation) => {
+    if (conversation.unreadCount > 0) {
+      dispatch(markAsRead(conversation.id));
+    }
+    router.push(`/chat/${conversation.id}`);
+  };
+
+  const handleFavoritePress = (conversationId: string) => {
+    dispatch(toggleFavorite(conversationId));
+  };
+
+  const formatLastMessage = (conversation: Conversation) => {
+    if (!conversation.lastMessage) return 'No messages';
+    
+    const message = conversation.lastMessage;
+    const isCurrentUser = message.senderId === 'current-user';
+    const prefix = isCurrentUser ? 'You: ' : '';
+    
+    return `${prefix}${message.text}`;
+  };
+
+  const formatTime = (date: Date) => {
+    const now = new Date();
+    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+    
+    if (diffInHours < 1) {
+      return 'Just now';
+    } else if (diffInHours < 24) {
+      return `${Math.floor(diffInHours)}h ago`;
+    } else {
+      return date.toLocaleDateString();
+    }
+  };
+
+  const renderConversation = ({ item }: { item: Conversation }) => {
+    const otherParticipant = item.participants.find(p => p.id !== 'current-user');
+    
+    return (
+      <TouchableOpacity
+        style={[styles.conversationItem, { borderBottomColor: iconColor + '30' }]}
+        onPress={() => handleConversationPress(item)}
+      >
         <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+          source={{ uri: otherParticipant?.avatar }}
+          style={styles.avatar}
+          placeholder="https://via.placeholder.com/50"
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        
+        <View style={styles.conversationContent}>
+          <View style={styles.conversationHeader}>
+            <Text style={[styles.participantName, { color: textColor }]}>
+              {otherParticipant?.name}
+            </Text>
+            <View style={styles.rightHeader}>
+              <Text style={[styles.timeText, { color: iconColor }]}>
+                {formatTime(item.lastActivity)}
+              </Text>
+              {item.unreadCount > 0 && (
+                <View style={[styles.unreadBadge, { backgroundColor: tintColor }]}>
+                  <Text style={styles.unreadText}>{item.unreadCount}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+          
+          <View style={styles.messageRow}>
+            <Text 
+              style={[styles.lastMessage, { color: iconColor }]} 
+              numberOfLines={1}
+            >
+              {formatLastMessage(item)}
+            </Text>
+            <View style={styles.indicators}>
+              {item.isTyping && (
+                <Text style={[styles.typingText, { color: tintColor }]}>
+                  typing...
+                </Text>
+              )}
+              {otherParticipant?.isOnline && (
+                <View style={styles.onlineIndicator} />
+              )}
+            </View>
+          </View>
+        </View>
+        
+        <TouchableOpacity
+          style={styles.favoriteButton}
+          onPress={() => handleFavoritePress(item.id)}
+        >
+          <Ionicons
+            name={item.isFavorite ? 'heart' : 'heart-outline'}
+            size={20}
+            color={item.isFavorite ? '#ff4757' : iconColor}
+          />
+        </TouchableOpacity>
+      </TouchableOpacity>
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor }]}>
+        <ActivityIndicator size="large" color={tintColor} style={styles.loader} />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor }]}>
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: textColor }]}>Chats</Text>
+        <TouchableOpacity
+          style={[styles.filterButton, { backgroundColor: showFavoritesOnly ? tintColor : 'transparent' }]}
+          onPress={() => setShowFavoritesOnly(!showFavoritesOnly)}
+        >
+          <Ionicons
+            name="heart"
+            size={24}
+            color={showFavoritesOnly ? '#fff' : iconColor}
+          />
+        </TouchableOpacity>
+      </View>
+      
+      <View style={[styles.searchContainer, { backgroundColor: iconColor + '10' }]}>
+        <Ionicons name="search" size={20} color={iconColor} />
+        <TextInput
+          style={[styles.searchInput, { color: textColor }]}
+          placeholder="Search conversations..."
+          placeholderTextColor={iconColor}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
+      
+      <FlatList
+        data={filteredConversations}
+        keyExtractor={item => item.id}
+        renderItem={renderConversation}
+        contentContainerStyle={styles.listContainer}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={[styles.emptyText, { color: iconColor }]}>
+              {showFavoritesOnly ? 'No favorite conversations' : 'No conversations found'}
+            </Text>
+          </View>
+        }
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: {
+    flex: 1,
+  },
+  loader: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: 'bold',
+  },
+  filterButton: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    marginHorizontal: 20,
+    marginBottom: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 25,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  searchInput: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 16,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  listContainer: {
+    paddingHorizontal: 20,
+  },
+  conversationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  conversationContent: {
+    flex: 1,
+  },
+  conversationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  participantName: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  rightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timeText: {
+    fontSize: 12,
+    marginRight: 8,
+  },
+  unreadBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  unreadText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  messageRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  lastMessage: {
+    fontSize: 14,
+    flex: 1,
+  },
+  indicators: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  typingText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginRight: 6,
+  },
+  onlineIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#2ecc71',
+  },
+  favoriteButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 50,
+  },
+  emptyText: {
+    fontSize: 16,
+    textAlign: 'center',
   },
 });
