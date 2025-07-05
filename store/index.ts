@@ -11,6 +11,8 @@ export const store = configureStore({
     getDefaultMiddleware({
       serializableCheck: {
         ignoredActions: ['persist/PERSIST', 'persist/REHYDRATE'],
+        ignoredPaths: ['chat.conversations', 'chat.currentConversation'],
+        ignoredActionPaths: ['payload.timestamp', 'payload.lastActivity', 'payload.messages', 'payload.lastMessage'],
       },
     }),
 });

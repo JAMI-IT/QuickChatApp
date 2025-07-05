@@ -1,6 +1,25 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { currentUser, mockConversations } from '../../data/mockData';
 import { ChatState, Conversation, Message } from '../../types/chat';
+import { StorageService } from '../../utils/storage';
+
+// Async thunks for storage operations
+export const loadConversationsFromStorage = createAsyncThunk(
+  'chat/loadConversationsFromStorage',
+  async () => {
+    const stored = await StorageService.loadConversations();
+    const favorites = await StorageService.loadFavorites();
+    return { conversations: stored || mockConversations, favorites };
+  }
+);
+
+export const saveConversationsToStorage = createAsyncThunk(
+  'chat/saveConversationsToStorage',
+  async (conversations: Conversation[]) => {
+    await StorageService.saveConversations(conversations);
+    return conversations;
+  }
+);
 
 const initialState: ChatState = {
   conversations: mockConversations,
@@ -26,7 +45,7 @@ const chatSlice = createSlice({
       if (conversation) {
         const newMessage: Message = {
           ...message,
-          id: `msg-${Date.now()}-${Math.random()}`,
+          id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           timestamp: new Date(),
         };
         
@@ -37,6 +56,11 @@ const chatSlice = createSlice({
         // Update unread count if message is from other user
         if (message.senderId !== currentUser.id) {
           conversation.unreadCount += 1;
+        }
+        
+        // Update current conversation if it's the same one
+        if (state.currentConversation?.id === conversationId) {
+          state.currentConversation = conversation;
         }
       }
     },
@@ -52,6 +76,11 @@ const chatSlice = createSlice({
             msg.isRead = true;
           }
         });
+        
+        // Update current conversation if it's the same one
+        if (state.currentConversation?.id === conversationId) {
+          state.currentConversation = conversation;
+        }
       }
     },
     
@@ -63,10 +92,15 @@ const chatSlice = createSlice({
         conversation.isFavorite = !conversation.isFavorite;
         
         if (conversation.isFavorite) {
-          state.favorites.push(conversationId);
+          if (!state.favorites.includes(conversationId)) {
+            state.favorites.push(conversationId);
+          }
         } else {
           state.favorites = state.favorites.filter(id => id !== conversationId);
         }
+        
+        // Save favorites to storage
+        StorageService.saveFavorites(state.favorites);
       }
     },
     
@@ -76,6 +110,11 @@ const chatSlice = createSlice({
       
       if (conversation) {
         conversation.isTyping = isTyping;
+        
+        // Update current conversation if it's the same one
+        if (state.currentConversation?.id === conversationId) {
+          state.currentConversation = conversation;
+        }
       }
     },
     
@@ -86,6 +125,24 @@ const chatSlice = createSlice({
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(loadConversationsFromStorage.pending, (state) => {
+        state.isLoading = true;
+      })
+      .addCase(loadConversationsFromStorage.fulfilled, (state, action) => {
+        state.conversations = action.payload.conversations;
+        state.favorites = action.payload.favorites;
+        state.isLoading = false;
+      })
+      .addCase(loadConversationsFromStorage.rejected, (state, action) => {
+        state.error = action.error.message || 'Failed to load conversations';
+        state.isLoading = false;
+      })
+      .addCase(saveConversationsToStorage.fulfilled, (state, action) => {
+        // Conversations are already updated in state
+      });
   },
 });
 
