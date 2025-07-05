@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -16,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useThemeColor } from '@/hooks/useThemeColor';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { markAsRead, toggleFavorite } from '@/store/slices/chatSlice';
+import { loadConversationsFromStorage, markAsRead, saveConversationsToStorage, toggleFavorite } from '@/store/slices/chatSlice';
 import { Conversation } from '@/types/chat';
 
 export default function ChatsScreen() {
@@ -31,38 +30,17 @@ export default function ChatsScreen() {
   const tintColor = useThemeColor({}, 'tint');
   const iconColor = useThemeColor({}, 'icon');
 
-  // Load favorites from AsyncStorage on component mount
+  // Load conversations from storage on component mount
   useEffect(() => {
-    loadFavoritesFromStorage();
-  }, []);
+    dispatch(loadConversationsFromStorage());
+  }, [dispatch]);
 
-  // Save favorites to AsyncStorage whenever they change
+  // Save conversations to storage whenever they change
   useEffect(() => {
-    saveFavoritesToStorage();
-  }, [favorites]);
-
-  const loadFavoritesFromStorage = async () => {
-    try {
-      const storedFavorites = await AsyncStorage.getItem('chatFavorites');
-      if (storedFavorites) {
-        const parsedFavorites = JSON.parse(storedFavorites);
-        // Update the Redux store with stored favorites
-        parsedFavorites.forEach((conversationId: string) => {
-          dispatch(toggleFavorite(conversationId));
-        });
-      }
-    } catch (error) {
-      console.error('Error loading favorites from storage:', error);
+    if (conversations.length > 0) {
+      dispatch(saveConversationsToStorage(conversations));
     }
-  };
-
-  const saveFavoritesToStorage = async () => {
-    try {
-      await AsyncStorage.setItem('chatFavorites', JSON.stringify(favorites));
-    } catch (error) {
-      console.error('Error saving favorites to storage:', error);
-    }
-  };
+  }, [conversations, dispatch]);
 
   const filteredConversations = conversations
     .filter(conv => {

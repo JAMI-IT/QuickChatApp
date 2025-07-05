@@ -1,68 +1,64 @@
-import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Image } from 'expo-image';
-import React, { useEffect } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import React, { useEffect } from "react";
 import {
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TouchableOpacity,
-    View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useColorScheme } from '@/hooks/useColorScheme';
-import { useThemeColor } from '@/hooks/useThemeColor';
-import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { setFontSize, setNotifications, setSoundEnabled, setTheme } from '@/store/slices/preferencesSlice';
+import { useColorScheme } from "@/hooks/useColorScheme";
+import { useThemeColor } from "@/hooks/useThemeColor";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  setFontSize,
+  setNotifications,
+  setSoundEnabled,
+  setTheme,
+} from "@/store/slices/preferencesSlice";
+import { StorageService } from "@/utils/storage";
 
 export default function ProfileScreen() {
   const dispatch = useAppDispatch();
-  const { user } = useAppSelector(state => state.chat);
-  const preferences = useAppSelector(state => state.preferences);
+  const { user } = useAppSelector((state) => state.chat);
+  const preferences = useAppSelector((state) => state.preferences);
   const systemColorScheme = useColorScheme();
-  
-  const backgroundColor = useThemeColor({}, 'background');
-  const textColor = useThemeColor({}, 'text');
-  const tintColor = useThemeColor({}, 'tint');
-  const iconColor = useThemeColor({}, 'icon');
 
-  // Load preferences from AsyncStorage on component mount
+  const backgroundColor = useThemeColor({}, "background");
+  const textColor = useThemeColor({}, "text");
+  const tintColor = useThemeColor({}, "tint");
+  const iconColor = useThemeColor({}, "icon");
+
+  // Load preferences from storage on component mount
   useEffect(() => {
     loadPreferencesFromStorage();
   }, []);
 
-  // Save preferences to AsyncStorage whenever they change
+  // Save preferences to storage whenever they change
   useEffect(() => {
-    savePreferencesToStorage();
+    StorageService.saveUserPreferences(preferences);
   }, [preferences]);
 
   const loadPreferencesFromStorage = async () => {
     try {
-      const storedPreferences = await AsyncStorage.getItem('userPreferences');
+      const storedPreferences = await StorageService.loadUserPreferences();
       if (storedPreferences) {
-        const parsedPreferences = JSON.parse(storedPreferences);
-        dispatch(setTheme(parsedPreferences.theme));
-        dispatch(setNotifications(parsedPreferences.notifications));
-        dispatch(setSoundEnabled(parsedPreferences.soundEnabled));
-        dispatch(setFontSize(parsedPreferences.fontSize));
+        dispatch(setTheme(storedPreferences.theme));
+        dispatch(setNotifications(storedPreferences.notifications));
+        dispatch(setSoundEnabled(storedPreferences.soundEnabled));
+        dispatch(setFontSize(storedPreferences.fontSize));
       }
     } catch (error) {
-      console.error('Error loading preferences from storage:', error);
+      console.error("Error loading preferences from storage:", error);
     }
   };
 
-  const savePreferencesToStorage = async () => {
-    try {
-      await AsyncStorage.setItem('userPreferences', JSON.stringify(preferences));
-    } catch (error) {
-      console.error('Error saving preferences to storage:', error);
-    }
-  };
-
-  const handleThemeChange = (theme: 'light' | 'dark' | 'system') => {
+  const handleThemeChange = (theme: "light" | "dark" | "system") => {
     dispatch(setTheme(theme));
   };
 
@@ -74,33 +70,33 @@ export default function ProfileScreen() {
     dispatch(setSoundEnabled(value));
   };
 
-  const handleFontSizeChange = (size: 'small' | 'medium' | 'large') => {
+  const handleFontSizeChange = (size: "small" | "medium" | "large") => {
     dispatch(setFontSize(size));
   };
 
   const showAbout = () => {
     Alert.alert(
-      'About QuickChat',
-      'QuickChat v1.0.0\n\nA beautiful and simple chat application built with React Native and Expo.',
-      [{ text: 'OK' }]
+      "About QuickChat",
+      "QuickChat v1.0.0\n\nA beautiful and simple chat application built with React Native and Expo.",
+      [{ text: "OK" }]
     );
   };
 
   const clearData = () => {
     Alert.alert(
-      'Clear Data',
-      'Are you sure you want to clear all app data? This action cannot be undone.',
+      "Clear Data",
+      "Are you sure you want to clear all app data? This action cannot be undone.",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Clear',
-          style: 'destructive',
+          text: "Clear",
+          style: "destructive",
           onPress: async () => {
             try {
-              await AsyncStorage.multiRemove(['chatFavorites', 'userPreferences']);
-              Alert.alert('Success', 'App data has been cleared.');
+              await StorageService.clearAllData();
+              Alert.alert("Success", "App data has been cleared.");
             } catch (error) {
-              Alert.alert('Error', 'Failed to clear app data.');
+              Alert.alert("Error", "Failed to clear app data.");
             }
           },
         },
@@ -115,16 +111,20 @@ export default function ProfileScreen() {
     rightComponent: React.ReactNode,
     onPress?: () => void
   ) => (
-    <TouchableOpacity 
-      style={[styles.settingItem, { borderBottomColor: iconColor + '20' }]}
+    <TouchableOpacity
+      style={[styles.settingItem, { borderBottomColor: iconColor + "20" }]}
       onPress={onPress}
       disabled={!onPress}
     >
       <View style={styles.settingLeft}>
         <Ionicons name={icon as any} size={24} color={iconColor} />
         <View style={styles.settingText}>
-          <Text style={[styles.settingTitle, { color: textColor }]}>{title}</Text>
-          <Text style={[styles.settingDescription, { color: iconColor }]}>{description}</Text>
+          <Text style={[styles.settingTitle, { color: textColor }]}>
+            {title}
+          </Text>
+          <Text style={[styles.settingDescription, { color: iconColor }]}>
+            {description}
+          </Text>
         </View>
       </View>
       {rightComponent}
@@ -139,74 +139,57 @@ export default function ProfileScreen() {
         </View>
 
         {/* User Profile Section */}
-        <View style={[styles.profileSection, { backgroundColor: iconColor + '10' }]}>
+        <View
+          style={[styles.profileSection, { backgroundColor: iconColor + "10" }]}
+        >
           <Image
             source={{ uri: user?.avatar }}
             style={styles.profileAvatar}
             placeholder="https://via.placeholder.com/80"
           />
           <View style={styles.profileInfo}>
-            <Text style={[styles.profileName, { color: textColor }]}>{user?.name}</Text>
+            <Text style={[styles.profileName, { color: textColor }]}>
+              {user?.name}
+            </Text>
             <Text style={[styles.profileStatus, { color: iconColor }]}>
-              {user?.isOnline ? 'Online' : 'Offline'}
+              {user?.isOnline ? "Online" : "Offline"}
             </Text>
           </View>
         </View>
 
         {/* Theme Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: textColor }]}>Appearance</Text>
-          
+          <Text style={[styles.sectionTitle, { color: textColor }]}>
+            Appearance
+          </Text>
+
           {renderSettingItem(
-            'moon',
-            'Theme',
-            'Choose your preferred theme',
+            "moon",
+            "Theme",
+            "Choose your preferred theme",
             <View style={styles.themeButtons}>
-              {['light', 'dark', 'system'].map((theme) => (
+              {["light", "dark", "system"].map((theme) => (
                 <TouchableOpacity
                   key={theme}
                   style={[
                     styles.themeButton,
-                    { 
-                      backgroundColor: preferences.theme === theme ? tintColor : 'transparent',
-                      borderColor: iconColor + '30',
-                    }
+                    {
+                      backgroundColor:
+                        preferences.theme === theme ? tintColor : "transparent",
+                      borderColor: iconColor + "30",
+                    },
                   ]}
                   onPress={() => handleThemeChange(theme as any)}
                 >
-                  <Text style={[
-                    styles.themeButtonText,
-                    { color: preferences.theme === theme ? '#fff' : iconColor }
-                  ]}>
+                  <Text
+                    style={[
+                      styles.themeButtonText,
+                      {
+                        color: preferences.theme === theme ? "#fff" : iconColor,
+                      },
+                    ]}
+                  >
                     {theme.charAt(0).toUpperCase() + theme.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {renderSettingItem(
-            'text',
-            'Font Size',
-            'Adjust text size',
-            <View style={styles.themeButtons}>
-              {['small', 'medium', 'large'].map((size) => (
-                <TouchableOpacity
-                  key={size}
-                  style={[
-                    styles.themeButton,
-                    { 
-                      backgroundColor: preferences.fontSize === size ? tintColor : 'transparent',
-                      borderColor: iconColor + '30',
-                    }
-                  ]}
-                  onPress={() => handleFontSizeChange(size as any)}
-                >
-                  <Text style={[
-                    styles.themeButtonText,
-                    { color: preferences.fontSize === size ? '#fff' : iconColor }
-                  ]}>
-                    {size.charAt(0).toUpperCase() + size.slice(1)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -216,29 +199,31 @@ export default function ProfileScreen() {
 
         {/* Notifications Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: textColor }]}>Notifications</Text>
-          
+          <Text style={[styles.sectionTitle, { color: textColor }]}>
+            Notifications
+          </Text>
+
           {renderSettingItem(
-            'notifications',
-            'Push Notifications',
-            'Receive notifications for new messages',
+            "notifications",
+            "Push Notifications",
+            "Receive notifications for new messages",
             <Switch
               value={preferences.notifications}
               onValueChange={handleNotificationsToggle}
-              trackColor={{ false: iconColor + '30', true: tintColor + '80' }}
-              thumbColor={preferences.notifications ? tintColor : '#f4f3f4'}
+              trackColor={{ false: iconColor + "30", true: tintColor + "80" }}
+              thumbColor={preferences.notifications ? tintColor : "#f4f3f4"}
             />
           )}
 
           {renderSettingItem(
-            'volume-high',
-            'Sound',
-            'Play sound for notifications',
+            "volume-high",
+            "Sound",
+            "Play sound for notifications",
             <Switch
               value={preferences.soundEnabled}
               onValueChange={handleSoundToggle}
-              trackColor={{ false: iconColor + '30', true: tintColor + '80' }}
-              thumbColor={preferences.soundEnabled ? tintColor : '#f4f3f4'}
+              trackColor={{ false: iconColor + "30", true: tintColor + "80" }}
+              thumbColor={preferences.soundEnabled ? tintColor : "#f4f3f4"}
             />
           )}
         </View>
@@ -246,19 +231,19 @@ export default function ProfileScreen() {
         {/* Other Settings */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: textColor }]}>Other</Text>
-          
+
           {renderSettingItem(
-            'information-circle',
-            'About',
-            'App information and version',
+            "information-circle",
+            "About",
+            "App information and version",
             <Ionicons name="chevron-forward" size={20} color={iconColor} />,
             showAbout
           )}
 
           {renderSettingItem(
-            'trash',
-            'Clear Data',
-            'Clear all app data and reset preferences',
+            "trash",
+            "Clear Data",
+            "Clear all app data and reset preferences",
             <Ionicons name="chevron-forward" size={20} color={iconColor} />,
             clearData
           )}
@@ -278,11 +263,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   profileSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     margin: 20,
     padding: 20,
     borderRadius: 16,
@@ -298,7 +283,7 @@ const styles = StyleSheet.create({
   },
   profileName: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 4,
   },
   profileStatus: {
@@ -310,19 +295,19 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 16,
   },
   settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 16,
     borderBottomWidth: 1,
   },
   settingLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
   settingText: {
@@ -331,14 +316,14 @@ const styles = StyleSheet.create({
   },
   settingTitle: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: "500",
     marginBottom: 2,
   },
   settingDescription: {
     fontSize: 14,
   },
   themeButtons: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   themeButton: {
@@ -349,6 +334,6 @@ const styles = StyleSheet.create({
   },
   themeButtonText: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: "500",
   },
-}); 
+});

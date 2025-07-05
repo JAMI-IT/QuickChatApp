@@ -1,6 +1,16 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { defaultUserPreferences } from '../../data/mockData';
 import { UserPreferences } from '../../types/chat';
+import { StorageService } from '../../utils/storage';
+
+// Async thunk for loading preferences from storage
+export const loadPreferencesFromStorage = createAsyncThunk(
+  'preferences/loadPreferencesFromStorage',
+  async () => {
+    const stored = await StorageService.loadUserPreferences();
+    return stored || defaultUserPreferences;
+  }
+);
 
 const initialState: UserPreferences = defaultUserPreferences;
 
@@ -27,6 +37,12 @@ const preferencesSlice = createSlice({
     resetPreferences: (state) => {
       Object.assign(state, defaultUserPreferences);
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(loadPreferencesFromStorage.fulfilled, (state, action) => {
+        Object.assign(state, action.payload);
+      });
   },
 });
 

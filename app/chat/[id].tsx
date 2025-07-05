@@ -1,49 +1,58 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
-    Animated,
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+  Animated,
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useThemeColor } from '@/hooks/useThemeColor';
-import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { addMessage, setCurrentConversation, setTyping } from '@/store/slices/chatSlice';
-import { Message } from '@/types/chat';
+import { useThemeColor } from "@/hooks/useThemeColor";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  addMessage,
+  saveConversationsToStorage,
+  setCurrentConversation,
+  setTyping,
+} from "@/store/slices/chatSlice";
+import { Message } from "@/types/chat";
 
 export default function ChatScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const dispatch = useAppDispatch();
-  const { conversations, currentConversation, user } = useAppSelector(state => state.chat);
-  const [message, setMessage] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  const { conversations, user } = useAppSelector((state) => state.chat);
+  const [message, setMessage] = useState("");
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
-  
-  const backgroundColor = useThemeColor({}, 'background');
-  const textColor = useThemeColor({}, 'text');
-  const tintColor = useThemeColor({}, 'tint');
-  const iconColor = useThemeColor({}, 'icon');
 
-  const conversation = conversations.find(conv => conv.id === id);
-  const otherParticipant = conversation?.participants.find(p => p.id !== user?.id);
+  const backgroundColor = useThemeColor({}, "background");
+  const textColor = useThemeColor({}, "text");
+  const tintColor = useThemeColor({}, "tint");
+  const iconColor = useThemeColor({}, "icon");
+
+  const conversation = conversations.find((conv) => conv.id === id);
+  const otherParticipant = conversation?.participants.find(
+    (p) => p.id !== user?.id
+  );
 
   useEffect(() => {
     if (conversation) {
       dispatch(setCurrentConversation(conversation));
     }
-    
+
     // Animate entrance
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -58,8 +67,33 @@ export default function ChatScreen() {
       }),
     ]).start();
 
+    // Keyboard listeners
+    const keyboardDidShowListener = Keyboard.addListener(
+      "keyboardDidShow",
+      (event) => {
+        setKeyboardVisible(true);
+        setKeyboardHeight(event.endCoordinates.height);
+        // Scroll to bottom when keyboard opens
+        setTimeout(() => {
+          if (flatListRef.current) {
+            flatListRef.current.scrollToEnd({ animated: true });
+          }
+        }, 100);
+      }
+    );
+
+    const keyboardDidHideListener = Keyboard.addListener(
+      "keyboardDidHide",
+      () => {
+        setKeyboardVisible(false);
+        setKeyboardHeight(0);
+      }
+    );
+
     return () => {
       dispatch(setCurrentConversation(null));
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
     };
   }, [conversation, dispatch]);
 
@@ -74,43 +108,58 @@ export default function ChatScreen() {
 
   const sendMessage = () => {
     if (message.trim() && conversation && user) {
-      dispatch(addMessage({
-        conversationId: conversation.id,
-        message: {
-          text: message.trim(),
-          senderId: user.id,
-          receiverId: otherParticipant?.id || '',
-          isRead: false,
-          type: 'text',
-        },
-      }));
-      setMessage('');
-      setIsTyping(false);
-      
+      dispatch(
+        addMessage({
+          conversationId: conversation.id,
+          message: {
+            text: message.trim(),
+            senderId: user.id,
+            receiverId: otherParticipant?.id || "",
+            isRead: false,
+            type: "text",
+          },
+        })
+      );
+      setMessage("");
+
+      // Save to storage after sending message
+      setTimeout(() => {
+        dispatch(saveConversationsToStorage(conversations));
+      }, 100);
+
       // Simulate typing indicator for other user
       simulateTyping();
     }
   };
 
   const simulateTyping = () => {
-    if (conversation) {
+    if (conversation && otherParticipant) {
       dispatch(setTyping({ conversationId: conversation.id, isTyping: true }));
-      
+
       // Simulate response after 2-3 seconds
       setTimeout(() => {
-        dispatch(setTyping({ conversationId: conversation.id, isTyping: false }));
-        
+        dispatch(
+          setTyping({ conversationId: conversation.id, isTyping: false })
+        );
+
         // Add a simulated response
-        dispatch(addMessage({
-          conversationId: conversation.id,
-          message: {
-            text: getRandomResponse(),
-            senderId: otherParticipant?.id || '',
-            receiverId: user?.id || '',
-            isRead: false,
-            type: 'text',
-          },
-        }));
+        dispatch(
+          addMessage({
+            conversationId: conversation.id,
+            message: {
+              text: getRandomResponse(),
+              senderId: otherParticipant.id,
+              receiverId: user?.id || "",
+              isRead: false,
+              type: "text",
+            },
+          })
+        );
+
+        // Save to storage after simulated response
+        setTimeout(() => {
+          dispatch(saveConversationsToStorage(conversations));
+        }, 100);
       }, 2000 + Math.random() * 1000);
     }
   };
@@ -132,24 +181,27 @@ export default function ChatScreen() {
   };
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const isCurrentUser = item.senderId === user?.id;
-    const isLastMessage = index === conversation?.messages.length! - 1;
     const prevMessage = index > 0 ? conversation?.messages[index - 1] : null;
-    const showAvatar = !isCurrentUser && (!prevMessage || prevMessage.senderId !== item.senderId);
-    
+    const showAvatar =
+      !isCurrentUser &&
+      (!prevMessage || prevMessage.senderId !== item.senderId);
+
     return (
       <Animated.View
         style={[
           styles.messageContainer,
-          isCurrentUser ? styles.messageContainerRight : styles.messageContainerLeft,
-          { 
+          isCurrentUser
+            ? styles.messageContainerRight
+            : styles.messageContainerLeft,
+          {
             opacity: fadeAnim,
             transform: [{ translateY: slideAnim }],
-          }
+          },
         ]}
       >
         {showAvatar && (
@@ -159,24 +211,33 @@ export default function ChatScreen() {
             placeholder="https://via.placeholder.com/30"
           />
         )}
-        
-        <View style={[
-          styles.messageBubble,
-          isCurrentUser 
-            ? [styles.messageBubbleRight, { backgroundColor: tintColor }]
-            : [styles.messageBubbleLeft, { backgroundColor: iconColor + '20' }],
-          !showAvatar && !isCurrentUser && styles.messageBubbleNoAvatar,
-        ]}>
-          <Text style={[
-            styles.messageText,
-            { color: isCurrentUser ? '#fff' : textColor }
-          ]}>
+
+        <View
+          style={[
+            styles.messageBubble,
+            isCurrentUser
+              ? [styles.messageBubbleRight, { backgroundColor: tintColor }]
+              : [
+                  styles.messageBubbleLeft,
+                  { backgroundColor: iconColor + "20" },
+                ],
+            !showAvatar && !isCurrentUser && styles.messageBubbleNoAvatar,
+          ]}
+        >
+          <Text
+            style={[
+              styles.messageText,
+              { color: isCurrentUser ? "#fff" : textColor },
+            ]}
+          >
             {item.text}
           </Text>
-          <Text style={[
-            styles.messageTime,
-            { color: isCurrentUser ? '#fff' : iconColor }
-          ]}>
+          <Text
+            style={[
+              styles.messageTime,
+              { color: isCurrentUser ? "#fff" : iconColor },
+            ]}
+          >
             {formatTime(item.timestamp)}
           </Text>
         </View>
@@ -186,7 +247,7 @@ export default function ChatScreen() {
 
   const renderTypingIndicator = () => {
     if (!conversation?.isTyping) return null;
-    
+
     return (
       <View style={styles.typingContainer}>
         <Image
@@ -194,7 +255,9 @@ export default function ChatScreen() {
           style={styles.typingAvatar}
           placeholder="https://via.placeholder.com/30"
         />
-        <View style={[styles.typingBubble, { backgroundColor: iconColor + '20' }]}>
+        <View
+          style={[styles.typingBubble, { backgroundColor: iconColor + "20" }]}
+        >
           <View style={styles.typingDots}>
             <View style={[styles.typingDot, { backgroundColor: iconColor }]} />
             <View style={[styles.typingDot, { backgroundColor: iconColor }]} />
@@ -217,82 +280,71 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor }]}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: iconColor + '20' }]}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={iconColor} />
-        </TouchableOpacity>
-        
-        <View style={styles.headerInfo}>
-          <Image
-            source={{ uri: otherParticipant?.avatar }}
-            style={styles.headerAvatar}
-            placeholder="https://via.placeholder.com/35"
-          />
-          <View style={styles.headerText}>
-            <Text style={[styles.headerName, { color: textColor }]}>
-              {otherParticipant?.name}
-            </Text>
-            <Text style={[styles.headerStatus, { color: iconColor }]}>
-              {otherParticipant?.isOnline ? 'Online' : 'Offline'}
-            </Text>
-          </View>
-        </View>
-        
-        <TouchableOpacity>
-          <Ionicons name="call" size={24} color={iconColor} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Messages */}
-      <FlatList
-        ref={flatListRef}
-        data={conversation.messages}
-        keyExtractor={item => item.id}
-        renderItem={renderMessage}
-        style={styles.messagesList}
-        contentContainerStyle={styles.messagesContent}
-        showsVerticalScrollIndicator={false}
-        onContentSizeChange={() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }}
-        ListFooterComponent={renderTypingIndicator}
-      />
-
-      {/* Input */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={[styles.inputContainer, { borderTopColor: iconColor + '20' }]}
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 90}
       >
-        <TextInput
-          style={[
-            styles.textInput,
-            { 
-              backgroundColor: iconColor + '10',
-              color: textColor,
-            }
-          ]}
-          placeholder="Type a message..."
-          placeholderTextColor={iconColor}
-          value={message}
-          onChangeText={setMessage}
-          multiline
-          maxLength={500}
+        {/* Messages */}
+        <FlatList
+          ref={flatListRef}
+          data={conversation.messages}
+          keyExtractor={(item) => item.id}
+          renderItem={renderMessage}
+          style={styles.messagesList}
+          contentContainerStyle={styles.messagesContent}
+          showsVerticalScrollIndicator={false}
+          maintainVisibleContentPosition={{
+            minIndexForVisible: 0,
+            autoscrollToTopThreshold: 100,
+          }}
+          ListFooterComponent={renderTypingIndicator}
         />
-        <TouchableOpacity
+
+        {/* Input Container - Now positioned normally in the flex layout */}
+        <View
           style={[
-            styles.sendButton,
-            { backgroundColor: message.trim() ? tintColor : iconColor + '30' }
+            styles.inputContainer,
+            {
+              borderTopColor: iconColor + "20",
+              backgroundColor: backgroundColor,
+            },
           ]}
-          onPress={sendMessage}
-          disabled={!message.trim()}
         >
-          <Ionicons
-            name="send"
-            size={20}
-            color={message.trim() ? '#fff' : iconColor}
+          <TextInput
+            style={[
+              styles.textInput,
+              {
+                backgroundColor: iconColor + "10",
+                color: textColor,
+              },
+            ]}
+            placeholder="Type a message..."
+            placeholderTextColor={iconColor}
+            value={message}
+            onChangeText={setMessage}
+            multiline
+            maxLength={500}
+            onSubmitEditing={sendMessage}
+            blurOnSubmit={false}
           />
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              {
+                backgroundColor: message.trim() ? tintColor : iconColor + "30",
+              },
+            ]}
+            onPress={sendMessage}
+            disabled={!message.trim()}
+          >
+            <Ionicons
+              name="send"
+              size={20}
+              color={message.trim() ? "#fff" : iconColor}
+            />
+          </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -302,53 +354,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  headerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  keyboardAvoidingView: {
     flex: 1,
-    marginLeft: 16,
-  },
-  headerAvatar: {
-    width: 35,
-    height: 35,
-    borderRadius: 17.5,
-    marginRight: 12,
-  },
-  headerText: {
-    flex: 1,
-  },
-  headerName: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  headerStatus: {
-    fontSize: 12,
-    marginTop: 2,
   },
   messagesList: {
     flex: 1,
   },
   messagesContent: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingTop: 8,
+    paddingBottom: 16,
   },
   messageContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginVertical: 4,
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
   },
   messageContainerRight: {
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   messageContainerLeft: {
-    justifyContent: 'flex-start',
+    justifyContent: "flex-start",
   },
   messageAvatar: {
     width: 30,
@@ -358,11 +384,19 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   messageBubble: {
-    maxWidth: '80%',
+    maxWidth: "80%",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 18,
     marginBottom: 4,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   messageBubbleRight: {
     borderBottomRightRadius: 4,
@@ -383,8 +417,8 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   typingContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
     marginVertical: 4,
   },
   typingAvatar: {
@@ -401,8 +435,8 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 4,
   },
   typingDots: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   typingDot: {
     width: 8,
@@ -412,11 +446,12 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
+    // Removed position: "absolute" and related positioning
   },
   textInput: {
     flex: 1,
@@ -431,12 +466,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   errorText: {
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: 50,
   },
-}); 
+});
